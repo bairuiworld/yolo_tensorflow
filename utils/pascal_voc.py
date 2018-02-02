@@ -23,11 +23,12 @@ class pascal_voc(object):
         self.cursor = 0
         self.epoch = 1
         self.gt_labels = None
+        self.label_size = 1 + 4 + len(self.classes)
         self.prepare()
 
     def get(self):
         images = np.zeros((self.batch_size, self.image_size, self.image_size, 3))
-        labels = np.zeros((self.batch_size, self.cell_size, self.cell_size, 25))
+        labels = np.zeros((self.batch_size, self.cell_size, self.cell_size, self.label_size))
         count = 0
         while count < self.batch_size:
             imname = self.gt_labels[self.cursor]['imname']
@@ -115,11 +116,12 @@ class pascal_voc(object):
         w_ratio = 1.0 * self.image_size / im.shape[1]
         # im = cv2.resize(im, [self.image_size, self.image_size])
 
-        label = np.zeros((self.cell_size, self.cell_size, 25))
+        label = np.zeros((self.cell_size, self.cell_size, self.label_size))
         filename = os.path.join(self.data_path, 'Annotations', index + '.xml')
         tree = ET.parse(filename)
         objs = tree.findall('object')
 
+        obj_num = 0
         for obj in objs:
             bbox = obj.find('bndbox')
             # Make pixel indexes 0-based
@@ -127,7 +129,12 @@ class pascal_voc(object):
             y1 = max(min((float(bbox.find('ymin').text) - 1) * h_ratio, self.image_size - 1), 0)
             x2 = max(min((float(bbox.find('xmax').text) - 1) * w_ratio, self.image_size - 1), 0)
             y2 = max(min((float(bbox.find('ymax').text) - 1) * h_ratio, self.image_size - 1), 0)
-            cls_ind = self.class_to_ind[obj.find('name').text.lower().strip()]
+            obj_name = obj.find('name').text.lower().strip()
+            if not obj_name in self.classes:
+                continue
+
+            obj_num += 1
+            cls_ind = self.class_to_ind[obj_name]
             boxes = [(x2 + x1) / 2.0, (y2 + y1) / 2.0, x2 - x1, y2 - y1]
             x_ind = int(boxes[0] * self.cell_size / self.image_size)
             y_ind = int(boxes[1] * self.cell_size / self.image_size)
@@ -137,4 +144,4 @@ class pascal_voc(object):
             label[y_ind, x_ind, 1:5] = boxes
             label[y_ind, x_ind, 5 + cls_ind] = 1
 
-        return label, len(objs)
+        return label, obj_num
